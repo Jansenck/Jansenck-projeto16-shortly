@@ -220,7 +220,8 @@ async function getRanking(req, res){
             SELECT 
                 users.id, 
                 users.name,
-                COUNT("shortUrls".id) AS "linksCount"
+                COUNT("shortUrls".id) AS "linksCount",
+                SUM("shortUrls".visits) AS "visitCount"
             FROM users
             JOIN sessions ON users.id = sessions."userId"
             JOIN urls ON sessions.id = urls."sessionId"
@@ -235,23 +236,8 @@ async function getRanking(req, res){
         );
 
         if(listRanking.rows.length === 0) return res.sendStatus(StatusCodes.NOT_FOUND);
-        /* const ranking = listRanking.rows[0]; */
 
-        const visitCount = await connection.query(
-            `SELECT * FROM "shortUrls";`
-        );
-
-        let sumVisitsUrl = 0;
-
-        const listVisitsUrl = visitCount.rows.map(urlVisitCount => {
-            sumVisitsUrl += parseInt(urlVisitCount.visits);
-        });
-
-        const rankingData = listRanking.rows.map(user => {
-            return {...user, visitCount: sumVisitsUrl}
-        });
-
-        return res.status(StatusCodes.OK).send(rankingData);
+        return res.status(StatusCodes.OK).send(listRanking.rows);
 
     } catch (error) {
         console.error(error);
