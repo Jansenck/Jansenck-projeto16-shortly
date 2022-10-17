@@ -148,8 +148,8 @@ async function getUser(req, res){
 
     try {
 
-        const userId = await connection.query(
-            `SELECT "userId" FROM sessions WHERE token=$1;`, [token]
+        const session = await connection.query(
+            `SELECT * FROM sessions WHERE token=$1;`, [token]
         );
 
         const user = await connection.query(
@@ -160,7 +160,7 @@ async function getUser(req, res){
                 FROM users 
                 JOIN sessions ON sessions."userId" = $1;
 
-            `, [userId.rows[0]]
+            `, [session.rows[0].userId]
         );
 
         if(user.rows.length === 0) return res.sendStatus(StatusCodes.NOT_FOUND);
@@ -173,15 +173,85 @@ async function getUser(req, res){
             FROM urls
             JOIN sessions ON urls."sessionId" = $1
             JOIN users ON sessions."userId" = $2;`,
-            [userId.rows[0].sessionId, userId.rows[0].userId]
+            [session.rows[0].id, user.rows[0].id]
         );
 
         const visitCount = await connection.query(
-            `SELECT visits FROM "shortUrls" WHERE token=$1;`, [url.rows[0].urlId]
+            `SELECT * FROM "shortUrls";`
         );
 
-        const URL = user.rows[0];
-        return res.status(StatusCodes.OK).send(URL);
+        let sumVisitsUrl = 0;
+
+        const listVisitsUrl = visitCount.rows.map(urlVisitCount => {
+            sumVisitsUrl += parseInt(urlVisitCount.visits);
+        });
+
+        const listShortenUrls = await connection.query(
+            `SELECT 
+                "shortUrls".id, 
+                "shortUrls"."shortUrl", 
+                urls.url,
+                "shortUrls".visits
+            FROM urls
+            JOIN "shortUrls" ON urls.id = "shortUrls"."urlId";`
+        );
+
+        const userData = {
+            id: user.rows[0].id,
+            name: user.rows[0].name,
+            visitCount: sumVisitsUrl,
+            shortenedUrls: listShortenUrls.rows
+        };
+
+        return res.status(StatusCodes.OK).send(userData);
+
+    } catch (error) {
+        console.error(error);
+        return res.sendStatus(StatusCodes.INTERNAL_SERVER_ERROR);
+    }
+}
+
+async function getRanking(req, res){
+
+    try {
+
+        const listRanking = await connection.query(
+            `
+            SELECT 
+                users.id, 
+                users.name,
+                COUNT("shortUrls".id) AS "linksCount"
+            FROM users
+            JOIN sessions ON users.id = sessions."userId"
+            JOIN urls ON sessions.id = urls."sessionId"
+            JOIN "shortUrls" ON  "shortUrls"."urlId" = urls.id
+
+            GROUP BY  
+                users.id, 
+                users.name
+                
+            ORDER BY "linksCount" DESC
+            LIMIT 10;`
+        );
+
+        if(listRanking.rows.length === 0) return res.sendStatus(StatusCodes.NOT_FOUND);
+        /* const ranking = listRanking.rows[0]; */
+
+        const visitCount = await connection.query(
+            `SELECT * FROM "shortUrls";`
+        );
+
+        let sumVisitsUrl = 0;
+
+        const listVisitsUrl = visitCount.rows.map(urlVisitCount => {
+            sumVisitsUrl += parseInt(urlVisitCount.visits);
+        });
+
+        const rankingData = listRanking.rows.map(user => {
+            return {...user, visitCount: sumVisitsUrl}
+        });
+
+        return res.status(StatusCodes.OK).send(rankingData);
 
     } catch (error) {
         console.error(error);
@@ -194,5 +264,6 @@ export {
     getShortUrl,
     openUrl,
     deleteUrl,
-    getUser
+    getUser,
+    getRanking
  };

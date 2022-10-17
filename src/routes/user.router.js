@@ -9,7 +9,8 @@ import {
     getShortUrl,
     openUrl,
     deleteUrl,
-    getUser
+    getUser,
+    getRanking
 } from "../controllers/user.controller.js";
 
 const route = express.Router();
@@ -19,5 +20,6 @@ route.get("/urls/:id", getShortUrl);
 route.get("/urls/open/:shortUrl", openUrl);
 route.delete("/urls/:id", deleteUrl);
 route.get("/users/me", getUser);
+route.get("/ranking", getRanking)
 
 export default route;
